@@ -1,0 +1,6 @@
+{
+  "name": "AxiosPOST",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./AxiosPOST.js"
+}
