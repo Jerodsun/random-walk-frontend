@@ -1,14 +1,14 @@
 {
-  "name": "coreui-random-walk",
+  "name": "random-walk-frontend",
   "version": "0.1.0",
   "private": true,
   "description": "Front end app for the random walk project",
   "author": "Jerod Sun",
-  "homepage": "http://jerodsun.github.io/coreui-random-walk",
+  "homepage": "http://jerodsun.github.io/random-walk-frontend",
   "copyright": "Copyright 2019 Sun",
   "repository": {
     "type": "git",
-    "url": "git@github.com:jerodsun/coreui-random-walk.git"
+    "url": "git@github.com:jerodsun/random-walk-frontend.git"
   },
   "dependencies": {
     "@coreui/coreui": "^2.1.12",
@@ -48,7 +48,7 @@
     "eject": "react-scripts eject"
   },
   "bugs": {
-    "url": "https://github.com/jerodsun/coreui-random-walk/issues"
+    "url": "https://github.com/jerodsun/random-walk-frontend/issues"
   },
   "eslintConfig": {
     "extends": "react-app"
