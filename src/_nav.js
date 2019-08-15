@@ -280,7 +280,12 @@ export default {
       name: 'AxiosPOST',
       url: '/AxiosPOST',
       icon: 'icon-star',
-    }
+    },
 
+    {
+      name: 'TablePOST',
+      url: '/TablePOST',
+      icon: 'icon-star',
+    }
   ],
 };
