@@ -3,6 +3,9 @@ This App was started from CoreUI Free React Admin Template v2
 `v2.6.0`
 
 
+Currently deployed at https://jerodsun.xyz/random-walk-frontend 
+There should be a way to attach onto a different CNAME...
+
 Insertion and deletion cascading sequence:
 - `routes.js` 
 - `_nav.js` 
@@ -24,3 +27,4 @@ _asynchronous_ nature of javascript execution. The root of the problem right now
 If `Promise` objects are not ready for execution, calling them outside the top-level module crashes the app. 
 Therefore, they must all be instantiated in the same class -
 but there is a particular design pattern such that there is no need for even that. So start from a very basic outline.
+
