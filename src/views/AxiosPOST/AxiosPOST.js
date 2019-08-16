@@ -1,240 +1,231 @@
-import React, { Component } from 'react';
+import React from 'react';
 
-import _ from "underscore";
-
-import { format } from "d3-format";
-
-// Pond
-import { TimeSeries } from "pondjs";
-
-import { ChartContainer, ChartRow, Charts, YAxis, LineChart, Baseline, Legend, Resizable, styler } from "react-timeseries-charts";
+import Ring from "ringjs";
 
 import {
-  ButtonGroup,
-  ButtonToolbar,
-  Card,
-  CardBody,
-  CardTitle,
-  Col,
-  Row,
-} from 'reactstrap';
-
-// Data
-const aud = require("./usd_vs_aud.json");
-const euro = require("./usd_vs_euro.json");
-
-function buildPoints() {
-    const audPoints = aud.widget[0].data.reverse();
-    const euroPoints = euro.widget[0].data.reverse();
-    let points = [];
-    for (let i = 0; i < audPoints.length; i++) {
-        points.push([audPoints[i][0], audPoints[i][1], euroPoints[i][1]]);
-    }
-    return points;
-}
-
-const currencySeries = new TimeSeries({
-    name: "Currency",
-    columns: ["time", "aud", "euro"],
-    points: buildPoints()
-});
-
-const style = styler([
-    { key: "aud", color: "steelblue", width: 2 },
-    { key: "euro", color: "#F68B24", width: 2 }
-]);
-
-class CrossHairs extends React.Component {
-    render() {
-        const { x, y } = this.props;
-        const style = { pointerEvents: "none", stroke: "#ccc" };
-        if (!_.isNull(x) && !_.isNull(y)) {
-            return (
-                <g>
-                    <line style={style} x1={0} y1={y} x2={this.props.width} y2={y} />
-                    <line style={style} x1={x} y1={0} x2={x} y2={this.props.height} />
-                </g>
-            );
-        } else {
-            return <g />;
-        }
-    }
-}
+  TimeSeries,
+  TimeRange,
+  TimeEvent,
+  Pipeline as pipeline,
+  Stream,
+  EventOut,
+  percentile
+} from "pondjs";
 
 
-class AxiosPOST extends Component {
+import { Charts, ChartContainer, ChartRow, YAxis, ScatterChart, BarChart, Resizable, Legend, styler } from "react-timeseries-charts";
+
+// import realtime_docs from "./realtime_docs.md";
+// import realtime_thumbnail from "./realtime_thumbnail.png";
+
+const sec = 1000;
+const minute = 60 * sec;
+const hours = 60 * minute;
+const rate = 80;
+
+class AxiosPOST extends React.Component {
+  static displayName = "AggregatorDemo";
+
   state = {
-    tracker: null,
-    timerange: currencySeries.range(),
-    x: null,
-    y: null
+      time: new Date(2015, 0, 1),
+      events: new Ring(200),
+      percentile50Out: new Ring(100),
+      percentile90Out: new Ring(100)
   };
 
-  handleTrackerChanged = tracker => {
-    if (!tracker) {
-      this.setState({ tracker, x: null, y: null });
-    } else {
-      this.setState({ tracker });
-    }
+  getNewEvent = t => {
+      const base = Math.sin(t.getTime() / 10000000) * 350 + 500;
+      return new TimeEvent(t, parseInt(base + Math.random() * 1000, 10));
   };
 
-  handleTimeRangeChange = timerange => {
-    this.setState({ timerange });
-  };
+  componentDidMount() {
+      //
+      // Setup our aggregation pipelines
+      //
 
-  handleMouseMove = (x, y) => {
-    this.setState({ x, y });
-  };
+      this.stream = new Stream();
+
+      pipeline()
+          .from(this.stream)
+          .windowBy("5m")
+          .emitOn("discard")
+          .aggregate({
+              value: { value: percentile(90) }
+          })
+          .to(EventOut, event => {
+              const events = this.state.percentile90Out;
+              events.push(event);
+              this.setState({ percentile90Out: events });
+          });
+
+      pipeline()
+          .from(this.stream)
+          .windowBy("5m")
+          .emitOn("discard")
+          .aggregate({
+              value: { value: percentile(50) }
+          })
+          .to(EventOut, event => {
+              const events = this.state.percentile50Out;
+              events.push(event);
+              this.setState({ percentile50Out: events });
+          });
+
+      //
+      // Setup our interval to advance the time and generate raw events
+      //
+
+      const increment = minute;
+      this.interval = setInterval(() => {
+          const t = new Date(this.state.time.getTime() + increment);
+          const event = this.getNewEvent(t);
+
+          // Raw events
+          const newEvents = this.state.events;
+          newEvents.push(event);
+          this.setState({ time: t, events: newEvents });
+
+          // Let our aggregators process the event
+          this.stream.addEvent(event);
+      }, rate);
+  }
+
+  componentWillUnmount() {
+      clearInterval(this.interval);
+  }
 
   render() {
-    const f = format("$,.2f");
-    const range = this.state.timerange;
+      const latestTime = `${this.state.time}`;
 
-    let euroValue, audValue;
-    if (this.state.tracker) {
-        const index = currencySeries.bisect(this.state.tracker);
-        const trackerEvent = currencySeries.at(index);
-        audValue = `${f(trackerEvent.get("aud"))}`;
-        euroValue = `${f(trackerEvent.get("euro"))}`;
-    } else {
-      audValue = "null";
-      euroValue = "null";
-    }
+      const fiveMinuteStyle = {
+          value: {
+              normal: { fill: "#619F3A", opacity: 0.2 },
+              highlight: { fill: "619F3A", opacity: 0.5 },
+              selected: { fill: "619F3A", opacity: 0.5 }
+          }
+      };
 
+      const scatterStyle = {
+          value: {
+              normal: {
+                  fill: "steelblue",
+                  opacity: 0.5
+              }
+          }
+      };
 
-    return (
+      //
+      // Create a TimeSeries for our raw, 5min and hourly events
+      //
 
-      <div className="animated fadeIn">
-        <Row>
-          <Col>
-            <Card className="bg-light">
-              <CardBody className="pb-0">
-                <ButtonGroup className="float-right"></ButtonGroup>
-                <Row>
-                  <Col sm="5">
-                    <CardTitle className="text-value">Traffic</CardTitle>
-                    <div className="small text-muted mb-2">November 2015</div>
-                  </Col>
-                  <Col sm="7" className="d-none d-sm-inline-block">
-                    <ButtonToolbar className="float-right" aria-label="Toolbar with button groups">
-                      <ButtonGroup className="mr-3" aria-label="First group">
-                      </ButtonGroup>
-                    </ButtonToolbar>
-                  </Col>
-                </Row>
+      const eventSeries = new TimeSeries({
+          name: "raw",
+          events: this.state.events.toArray()
+      });
 
+      const perc50Series = new TimeSeries({
+          name: "five minute perc50",
+          events: this.state.percentile50Out.toArray()
+      });
 
-                <div className="row">
-                    <div className="col-md-12">
-                        <Resizable>
-                            <ChartContainer
-                                timeRange={range}
-                                timeAxisStyle={{
-                                    ticks: {
-                                        stroke: "#AAA",
-                                        opacity: 0.25,
-                                        "stroke-dasharray": "1,1"
-                                        // Note: this isn't in camel case because this is
-                                        // passed into d3's style
-                                    },
-                                    values: {
-                                        fill: "#AAA",
-                                        "font-size": 12
-                                    }
-                                }}
-                                showGrid={true}
-                                paddingRight={100}
-                                maxTime={currencySeries.range().end()}
-                                minTime={currencySeries.range().begin()}
-                                timeAxisAngledLabels={true}
-                                timeAxisHeight={65}
-                                onTrackerChanged={this.handleTrackerChanged}
-                                onBackgroundClick={() => this.setState({ selection: null })}
-                                enablePanZoom={true}
-                                onTimeRangeChanged={this.handleTimeRangeChange}
-                                onMouseMove={(x, y) => this.handleMouseMove(x, y)}
-                                minDuration={1000 * 60 * 60 * 24 * 30}
-                            >
-                                <ChartRow height="400">
-                                    <YAxis
-                                        id="y"
-                                        label="Price ($)"
-                                        min={0.5}
-                                        max={1.5}
-                                        style={{
-                                            ticks: {
-                                                stroke: "#AAA",
-                                                opacity: 0.25,
-                                                "stroke-dasharray": "1,1"
-                                                // Note: this isn't in camel case because this is
-                                                // passed into d3's style
-                                            }
-                                        }}
-                                        showGrid
-                                        hideAxisLine
-                                        width="60"
-                                        type="linear"
-                                        format="$,.2f"
-                                    />
-                                    <Charts>
-                                        <LineChart
-                                            axis="y"
-                                            breakLine={false}
-                                            series={currencySeries}
-                                            columns={["aud", "euro"]}
-                                            style={style}
-                                            interpolation="curveBasis"
-                                            highlight={this.state.highlight}
-                                            onHighlightChange={highlight =>
-                                                this.setState({ highlight })
-                                            }
-                                            selection={this.state.selection}
-                                            onSelectionChange={selection =>
-                                                this.setState({ selection })
-                                            }
-                                        />
-                                        <CrossHairs x={this.state.x} y={this.state.y} />
-                                        <Baseline
-                                            axis="y"
-                                            value={1.0}
-                                            label="USD Baseline"
-                                            position="right"
-                                        />
-                                    </Charts>
-                                </ChartRow>
-                            </ChartContainer>
-                        </Resizable>
-                    </div>
+      const perc90Series = new TimeSeries({
+          name: "five minute perc90",
+          events: this.state.percentile90Out.toArray()
+      });
 
-                <div className="row">
-                    <div className="col-md-12">
-                        <span>
-                            <Legend
-                                type="line"
-                                align="right"
-                                style={style}
-                                highlight={this.state.highlight}
-                                onHighlightChange={highlight => this.setState({ highlight })}
-                                selection={this.state.selection}
-                                onSelectionChange={selection => this.setState({ selection })}
-                                categories={[
-                                    { key: "aud", label: "AUD", value: audValue },
-                                    { key: "euro", label: "Euro", value: euroValue }
-                                ]}
-                            />
-                            <div></div>
-                        </span>
-                    </div>
-                </div>
-            </div>
-              <div> second stuff here </div>
-              </CardBody>
-            </Card>
-          </Col>
-        </Row>
-      </div>
-    );
+      // Timerange for the chart axis
+      const initialBeginTime = new Date(2015, 0, 1);
+      const timeWindow = 3 * hours;
+
+      let beginTime;
+      const endTime = new Date(this.state.time.getTime() + minute);
+      if (endTime.getTime() - timeWindow < initialBeginTime.getTime()) {
+          beginTime = initialBeginTime;
+      } else {
+          beginTime = new Date(endTime.getTime() - timeWindow);
+      }
+      const timeRange = new TimeRange(beginTime, endTime);
+
+      // Charts (after a certain amount of time, just show hourly rollup)
+      const charts = (
+          <Charts>
+              <BarChart
+                  axis="y"
+                  series={perc90Series}
+                  style={fiveMinuteStyle}
+                  columns={["value"]}
+              />
+              <BarChart
+                  axis="y"
+                  series={perc50Series}
+                  style={fiveMinuteStyle}
+                  columns={["value"]}
+              />
+              <ScatterChart axis="y" series={eventSeries} style={scatterStyle} />
+          </Charts>
+      );
+
+      const dateStyle = {
+          fontSize: 12,
+          color: "#AAA",
+          borderWidth: 1,
+          borderColor: "#F4F4F4"
+      };
+
+      const style = styler([
+          { key: "perc50", color: "#C5DCB7", width: 1, dashed: true },
+          { key: "perc90", color: "#DFECD7", width: 2 }
+      ]);
+
+      return (
+          <div>
+              <div className="row">
+                  <div className="col-md-4">
+                      <Legend
+                          type="swatch"
+                          style={style}
+                          categories={[
+                              {
+                                  key: "perc50",
+                                  label: "50th Percentile",
+                                  style: { fill: "#C5DCB7" }
+                              },
+                              {
+                                  key: "perc90",
+                                  label: "90th Percentile",
+                                  style: { fill: "#DFECD7" }
+                              }
+                          ]}
+                      />
+                  </div>
+                  <div className="col-md-8">
+                      <span style={dateStyle}>{latestTime}</span>
+                  </div>
+              </div>
+              <hr />
+              <div className="row">
+                  <div className="col-md-12">
+                      <Resizable>
+                          <ChartContainer timeRange={timeRange}>
+                              <ChartRow height="150">
+                                  <YAxis
+                                      id="y"
+                                      label="Value"
+                                      min={0}
+                                      max={1500}
+                                      width="70"
+                                      type="linear"
+                                  />
+                                  {charts}
+                              </ChartRow>
+                          </ChartContainer>
+                      </Resizable>
+                  </div>
+              </div>
+          </div>
+      );
   }
 }
 
+// Export example
 export default AxiosPOST;
