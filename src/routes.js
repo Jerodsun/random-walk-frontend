@@ -36,6 +36,9 @@ const Widgets = React.lazy(() => import('./views/Widgets/Widgets'));
 const Users = React.lazy(() => import('./views/Users/Users'));
 const User = React.lazy(() => import('./views/Users/User'));
 
+const AxiosSample = React.lazy(() => import('./views/AxiosPOST'));
+const TableSample = React.lazy(() => import('./views/TablePOST'));
+
 // https://github.com/ReactTraining/react-router/tree/master/packages/react-router-config
 const routes = [
   { path: '/', exact: true, name: 'Home' },
@@ -79,6 +82,8 @@ const routes = [
   { path: '/charts', name: 'Charts', component: Charts },
   { path: '/users', exact: true,  name: 'Users', component: Users },
   { path: '/users/:id', exact: true, name: 'User Details', component: User },
+  { path: '/axiospost', exact: true, name: 'Sample Endpoint', component: AxiosSample },
+  { path: '/tablePOST', exact: true, name: 'Sample Table', component: TableSample },
 ];
 
 export default routes;
